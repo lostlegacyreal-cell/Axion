@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "axion-ai",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,6 @@
     "install:python": "pip install -r requirements.txt || pip3 install -r requirements.txt"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
