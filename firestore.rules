@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidTradeSignal(data) {
+      return hasRequiredFields(['asset', 'direction', 'confidence', 'strategy', 'timeframe', 'timestamp', 'userId']) &&
+             data.asset is string && data.asset.size() > 0 && data.asset.size() <= 10 &&
+             data.direction in ['CALL', 'PUT'] &&
+             data.confidence is number && data.confidence >= 0 && data.confidence <= 100 &&
+             data.strategy is string && data.strategy.size() > 0 && data.strategy.size() <= 50 &&
+             data.timeframe is string && data.timeframe.size() > 0 && data.timeframe.size() <= 20 &&
+             (!('executionTiming' in data) || (data.executionTiming is string && data.executionTiming.size() <= 100)) &&
+             (!('executionSeconds' in data) || (data.executionSeconds is number && data.executionSeconds >= 0)) &&
+             data.timestamp is number && data.timestamp > 0 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 50;
+    }
+
+    function isValidAutoTradeSettings(data) {
+      return hasRequiredFields(['isActive', 'tradeAmount', 'maxDailyTrades', 'minConfidence', 'userId']) &&
+             data.isActive is bool &&
+             data.tradeAmount is number && data.tradeAmount > 0 &&
+             data.maxDailyTrades is number && data.maxDailyTrades > 0 &&
+             data.minConfidence is number && data.minConfidence >= 0 && data.minConfidence <= 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 50;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /signals/{signalId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidTradeSignal(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidTradeSignal(request.resource.data) && uidNotModified() && areImmutableFieldsUnchanged(['timestamp', 'userId']);
+      allow delete: if isDocOwner();
+    }
+
+    match /autoTradeSettings/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidAutoTradeSettings(request.resource.data) && uidUnchanged();
+      allow update: if isOwner(userId) && isValidAutoTradeSettings(request.resource.data) && uidNotModified() && areImmutableFieldsUnchanged(['userId']);
+      allow delete: if isOwner(userId);
+    }
+  }
+}
